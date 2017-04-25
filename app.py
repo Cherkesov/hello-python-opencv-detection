@@ -2,7 +2,14 @@ import numpy as np
 import cv2
 
 
-# B G R
+def is_gray(image):
+    height, width, channels = image.shape
+    for x in range(0, width):
+        for y in range(0, height):
+            if not image[x, y, 0] == image[x, y, 1] == image[x, y, 2]:
+                return False
+    return True
+
 
 def draw_counter_with_colored_mask(image, lower_color, upper_color, counter_color):
     lower = np.array(lower_color)
@@ -12,18 +19,77 @@ def draw_counter_with_colored_mask(image, lower_color, upper_color, counter_colo
     if len(contours) == 0:
         return
     cv2.drawContours(image, contours, -1, counter_color, 1)
-    # cv2.drawContours(image, contours, -1, (0, 0, 255), 1)
     pass
 
 
 def draw_counter_with_gray_threshold(image, threshold_color, counter_color):
-    imgray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    ret, thresh = cv2.threshold(imgray, *threshold_color)
+    if not is_gray(image):
+        img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        img_gray = image.copy()
+    ret, thresh = cv2.threshold(img_gray, *threshold_color)
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     if len(contours) == 0:
         return
     cv2.drawContours(image, contours, -1, counter_color, 1)
     pass
+
+
+def crop_image_with_haar_cascade(image, haar_cascade):
+    dtcs = haar_cascade.detectMultiScale(
+        image,
+        scaleFactor=1.1,
+        minNeighbors=5,
+        minSize=(30, 30),
+        flags=cv2.CASCADE_SCALE_IMAGE
+    )
+
+    if len(dtcs) == 0:
+        return image
+    (x, y, w, h) = dtcs[0]
+    return image[x:x + w, y:y + h]
+
+
+def detect_areas_by_signatures_base(image, base_name, base_size):
+    # All the 6 methods for comparison in a list
+    methods = [
+        'cv2.TM_CCOEFF',
+        'cv2.TM_CCOEFF_NORMED',
+        'cv2.TM_CCORR',
+        'cv2.TM_CCORR_NORMED',
+        'cv2.TM_SQDIFF',
+        'cv2.TM_SQDIFF_NORMED',
+    ]
+
+    dtcs = list()
+
+    if not is_gray(image):
+        img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        img_gray = image.copy()
+
+    # for sig_number in range(0, 3):
+    for sig_number in range(0, base_size):
+        template = cv2.imread("signature/%s/%d.jpg" % (base_name, sig_number), cv2.CV_LOAD_IMAGE_GRAYSCALE)
+        w, h = template.shape[::-1]
+
+        for method_name in methods:
+            method = eval(method_name)
+
+            # Apply template Matching
+            res = cv2.matchTemplate(img_gray, template, method)
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+
+            # If the method is TM_SQDIFF or TM_SQDIFF_NORMED, take minimum
+            if method in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
+                top_left = min_loc
+            else:
+                top_left = max_loc
+            bottom_right = (top_left[0] + w, top_left[1] + h)
+
+            dtcs.append(top_left + bottom_right)
+
+    return dtcs
 
 
 # European woman skin color palette
@@ -54,57 +120,35 @@ cascade_mouth = cv2.CascadeClassifier(cascades_dir + "/haarcascade_mcs_mouth.xml
 
 # load the games image
 im = cv2.imread("images/face-9.jpg")
-# im = cv2.imread("tmp-output/test-2.jpg")
 
 im = cv2.fastNlMeansDenoisingColored(im, None, 10, 10, 10, 30)
+# im = cv2.fastNlMeansDenoising(im, None, 10, 10, 30)
 # im = cv2.fastNlMeansDenoisingColored(im, None, 5, 5, 5, 15)
 
 
-# generating the kernels
 # kernel_sharpen_1 = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
-kernel_sharpen_1 = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
-kernel_sharpen_2 = np.array([[1, 1, 1], [1, -7, 1], [1, 1, 1]])
-kernel_sharpen_3 = np.array(
-    [[-1, -1, -1, -1, -1], [-1, 2, 2, 2, -1], [-1, 2, 8, 2, -1], [-1, 2, 2, 2, -1], [-1, -1, -1, -1, -1]]
-) / 8.0
+# kernel_sharpen_2 = np.array([[1, 1, 1], [1, -7, 1], [1, 1, 1]])
+# kernel_sharpen_3 = np.array(
+#     [[-1, -1, -1, -1, -1], [-1, 2, 2, 2, -1], [-1, 2, 8, 2, -1], [-1, 2, 2, 2, -1], [-1, -1, -1, -1, -1]]
+# ) / 8.0
 
 # applying different kernels to the input image
-im = cv2.filter2D(im, -1, kernel_sharpen_1)
+# im = cv2.filter2D(im, -1, kernel_sharpen_1)
 # im = cv2.filter2D(im, -1, kernel_sharpen_2)
 # im = cv2.filter2D(im, -1, kernel_sharpen_3)
 
-# faces = haarcascade_frontalface_alt2.detectMultiScale(
-#     im,
-#     scaleFactor=1.1,
-#     minNeighbors=5,
-#     minSize=(30, 30),
-#     flags=cv2.CASCADE_SCALE_IMAGE
-# )
-# if len(faces) == 0:
-#     print "Faces not found!"
-#     exit(0)
-# (x, y, w, h) = faces[0]
-# im = im[x:x + w, y:y + h]
-
-
-# mouths = cascade_mouth.detectMultiScale(
-#     im,
-#     scaleFactor=1.1,
-#     minNeighbors=5,
-#     minSize=(30, 30),
-#     flags=cv2.CASCADE_SCALE_IMAGE
-# )
-# if len(mouths) == 0:
-#     print "Mouths not found!"
-#     exit(0)
-# (x, y, w, h) = mouths[0]
-# im = im[x:x + w, y:y + h]
-
+# im = crop_image_with_haar_cascade(im, haarcascade_frontalface_alt2)
+# im = crop_image_with_haar_cascade(im, cascade_mouth)
 
 # draw_counter_with_gray_threshold(im, (127, 255, 0), [0, 0, 255])  # hair, eyebrows, eyelashes
 # draw_counter_with_colored_mask(im, [0, 0, 128], [64, 64, 255], [0, 255, 0])  # mouth input counter
 # draw_counter_with_colored_mask(im, [0, 0, 205], [170, 170, 255], [255, 255, 0])  # lips counter
 # draw_counter_with_colored_mask(im, [0, 0, 200], [190, 170, 255], [0, 255, 255])  # lips counter
+
+
+detections = detect_areas_by_signatures_base(im, "eye", 4)
+for d in detections:
+    cv2.rectangle(im, (d[0], d[1]), (d[2], d[3]), 255, 2)
 
 cv2.imshow("Image", im)
 cv2.waitKey(0)

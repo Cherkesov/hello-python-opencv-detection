@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import itertools
 
 
 def is_gray(image):
@@ -35,22 +36,26 @@ def draw_counter_with_gray_threshold(image, threshold_color, counter_color):
     pass
 
 
-def crop_image_with_haar_cascade(image, haar_cascade):
-    dtcs = haar_cascade.detectMultiScale(
+def detect_with_haar_cascade(image, haar_cascade):
+    return haar_cascade.detectMultiScale(
         image,
         scaleFactor=1.1,
         minNeighbors=5,
         minSize=(30, 30),
         flags=cv2.CASCADE_SCALE_IMAGE
     )
+    pass
 
+
+def crop_image_with_haar_cascade(image, haar_cascade):
+    dtcs = detect_with_haar_cascade(image, haar_cascade)
     if len(dtcs) == 0:
         return image
     (x, y, w, h) = dtcs[0]
     return image[x:x + w, y:y + h]
 
 
-def detect_areas_by_signatures_base(image, base_name, base_size):
+def detect_areas_by_signatures_base(image, base_name, extension, names_range):
     # All the 6 methods for comparison in a list
     methods = [
         'cv2.TM_CCOEFF',
@@ -69,8 +74,10 @@ def detect_areas_by_signatures_base(image, base_name, base_size):
         img_gray = image.copy()
 
     # for sig_number in range(0, 3):
-    for sig_number in range(0, base_size):
-        template = cv2.imread("signature/%s/%d.jpg" % (base_name, sig_number), cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    for sig_number in names_range:
+        filename = "signature/%s/%d.%s" % (base_name, sig_number, extension)
+        print filename
+        template = cv2.imread(filename, cv2.CV_LOAD_IMAGE_GRAYSCALE)
         w, h = template.shape[::-1]
 
         for method_name in methods:
@@ -113,10 +120,25 @@ def detect_areas_by_signatures_base(image, base_name, base_size):
 # 520 340
 
 cascades_dir = "/usr/local/share/OpenCV/haarcascades"
-haarcascade_frontalface_default = cv2.CascadeClassifier(cascades_dir + "/haarcascade_frontalface_default.xml")
+
+haarcascade_profileface = cv2.CascadeClassifier(cascades_dir + "/haarcascade_profileface.xml")
+haarcascade_frontalcatface = cv2.CascadeClassifier(cascades_dir + "/haarcascade_frontalcatface.xml")
 haarcascade_frontalface_alt = cv2.CascadeClassifier(cascades_dir + "/haarcascade_frontalface_alt.xml")
 haarcascade_frontalface_alt2 = cv2.CascadeClassifier(cascades_dir + "/haarcascade_frontalface_alt2.xml")
-cascade_mouth = cv2.CascadeClassifier(cascades_dir + "/haarcascade_mcs_mouth.xml")
+haarcascade_frontalface_default = cv2.CascadeClassifier(cascades_dir + "/haarcascade_frontalface_default.xml")
+haarcascade_frontalface_alt_tree = cv2.CascadeClassifier(cascades_dir + "/haarcascade_frontalface_alt_tree.xml")
+haarcascade_frontalcatface_extended = cv2.CascadeClassifier(cascades_dir + "/haarcascade_frontalcatface_extended.xml")
+
+haarcascade_mcs_mouth = cv2.CascadeClassifier(cascades_dir + "/haarcascade_mcs_mouth.xml")
+
+haarcascade_eye = cv2.CascadeClassifier(cascades_dir + "/haarcascade_eye.xml")
+haarcascade_mcs_lefteye = cv2.CascadeClassifier(cascades_dir + "/haarcascade_mcs_lefteye.xml")
+haarcascade_mcs_righteye = cv2.CascadeClassifier(cascades_dir + "/haarcascade_mcs_righteye.xml")
+haarcascade_lefteye_2splits = cv2.CascadeClassifier(cascades_dir + "/haarcascade_lefteye_2splits.xml")
+haarcascade_mcs_eyepair_big = cv2.CascadeClassifier(cascades_dir + "/haarcascade_mcs_eyepair_big.xml")
+haarcascade_righteye_2splits = cv2.CascadeClassifier(cascades_dir + "/haarcascade_righteye_2splits.xml")
+haarcascade_mcs_eyepair_small = cv2.CascadeClassifier(cascades_dir + "/haarcascade_mcs_eyepair_small.xml")
+haarcascade_eye_tree_eyeglasses = cv2.CascadeClassifier(cascades_dir + "/haarcascade_eye_tree_eyeglasses.xml")
 
 # load the games image
 im = cv2.imread("images/face-9.jpg")
@@ -138,7 +160,44 @@ im = cv2.fastNlMeansDenoisingColored(im, None, 10, 10, 10, 30)
 # im = cv2.filter2D(im, -1, kernel_sharpen_3)
 
 # im = crop_image_with_haar_cascade(im, haarcascade_frontalface_alt2)
-# im = crop_image_with_haar_cascade(im, cascade_mouth)
+# im = crop_image_with_haar_cascade(im, haarcascade_mcs_mouth)
+
+
+# haar_face = (
+#     haarcascade_profileface,
+#     haarcascade_frontalcatface,
+#     haarcascade_frontalface_alt,
+#     haarcascade_frontalface_alt2,
+#     haarcascade_frontalface_default,
+#     haarcascade_frontalface_alt_tree,
+#     haarcascade_frontalcatface_extended,
+# )
+# detections = list()
+# for hc_face in haar_face:
+#     detections.append(detect_with_haar_cascade(im, hc_face))
+# for d in detections:
+#     (x, y, w, h) = d[0]
+#     cv2.rectangle(im, (x, y), (x + w, y + h), (0, 0, 255), 2)
+
+
+eye_haar_cascades = (
+    haarcascade_eye,
+    haarcascade_mcs_lefteye,
+    haarcascade_mcs_righteye,
+    haarcascade_lefteye_2splits,
+    haarcascade_mcs_eyepair_big,
+    haarcascade_righteye_2splits,
+    haarcascade_mcs_eyepair_small,
+    haarcascade_eye_tree_eyeglasses,
+)
+detections = list()
+for eye_hc in eye_haar_cascades:
+    a = detect_with_haar_cascade(im, eye_hc)
+    x = [detections, a]
+    detections = list(itertools.chain.from_iterable(x))
+for d in detections:
+    (x, y, w, h) = d
+    cv2.rectangle(im, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
 # draw_counter_with_gray_threshold(im, (127, 255, 0), [0, 0, 255])  # hair, eyebrows, eyelashes
 # draw_counter_with_colored_mask(im, [0, 0, 128], [64, 64, 255], [0, 255, 0])  # mouth input counter
@@ -146,9 +205,10 @@ im = cv2.fastNlMeansDenoisingColored(im, None, 10, 10, 10, 30)
 # draw_counter_with_colored_mask(im, [0, 0, 200], [190, 170, 255], [0, 255, 255])  # lips counter
 
 
-detections = detect_areas_by_signatures_base(im, "eye", 4)
-for d in detections:
-    cv2.rectangle(im, (d[0], d[1]), (d[2], d[3]), 255, 2)
+# detections = detect_areas_by_signatures_base(im, "eye-png", "png", range(0, 6))
+# for d in detections:
+#     cv2.rectangle(im, (d[0], d[1]), (d[2], d[3]), 255, 2)
 
 cv2.imshow("Image", im)
 cv2.waitKey(0)
+cv2.destroyAllWindows()
